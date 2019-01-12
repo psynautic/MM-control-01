@@ -17,8 +17,25 @@ const int selector_steps = 2790/4;
 const int idler_steps = 1420 / 4;    // 2 msteps = 180 / 4
 const int idler_parking_steps = (idler_steps / 2) + 40;  // 40
 
-const int bowden_length = 1000;
-// endstop to tube  - 30 mm, 550 steps
+const uint16_t bowden_load_decelerate_steps = 2000; //Start deceleration this many steps before end of bowden length is reached so ~98mm 2000. (1500 for FAST)
+const uint16_t load_init_speed = 4500;				//Initial speed when loading
+const uint16_t load_slow_speed = 3000;				//Slow speed while loading (pushing) the filament
+const uint16_t load_fast_speed = 650;				//Fast speed while loading (pushing) the filament 650, (300 for fast).
+const uint8_t load_decel = 4;						//@unload, the deceleration 4 (6 for fast)
+const uint8_t load_accel = 5;						//@unload, the acceleration 5 (8 for fast)
+
+const uint16_t unload_extra_distance = 1500;		//Extra steps during unload for reaching the FINDA, set to 0 if you are sure.
+
+const uint16_t unload_init_speed = 2000;			//Initial speed when unloading
+const uint16_t unload_veryslow_speed = 6000;		//Very slow speed while unloading (pulling) the filament
+const uint16_t unload_slow_speed = 2500;			//Slow speed while unloading (pulling) the filament
+const uint16_t unload_fast_speed = 550;				//Fast speed while unloading (pulling) the filament 550, (250 for FAST)
+const uint16_t unload_start_acceleration = 1500;	//Start acceleration after this many steps
+const uint16_t unload_start_deceleration = 1500;	//Start deceleration this steps before the end 1500 (1100 for FAST)
+const uint16_t unload_start_lastdeceleration = 1100;//Start the final deceleration this steps before the end 1100 (700 for FAST)
+const uint8_t unload_bigdecel = 5;					//@unload, the fast deceleration 5 (6 for FAST)
+const uint8_t unload_decel = 2;						//@unload, the normal deceleration 3 (6 for FAST)
+const uint8_t unload_accel = 3;						//@unload, the acceleration 2 (8 for FAST)
 
 int selector_steps_for_eject = 0;
 int idler_steps_for_eject = 0;
@@ -124,7 +141,7 @@ void recover_after_eject()
 
 void load_filament_withSensor()
 {
-    FilamentLoaded::set(active_extruder);
+  FilamentLoaded::set(active_extruder);
 	if (isIdlerParked) park_idler(true); // if idler is in parked position un-park him get in contact with filament
 
 	tmc2130_init_axis(AX_PUL, tmc2130_mode);
@@ -144,7 +161,9 @@ void load_filament_withSensor()
 	} while (digitalRead(A1) == 0 && _loadSteps < 1500);
 
 
-	// filament did not arrived at FINDA, let's try to correct that
+	// filament did not arrived at FINDA, let's try to correct that by doing 6 times a:
+	//   10mm (200 steps) FAST pull (delay 1500us, so 33   mm/s)
+	//   25mm (500 steps)      push (delay 4000us, so 12.4 mm/s)
 	if (digitalRead(A1) == 0)
 	{
 		for (int i = 6; i > 0; i--)
@@ -232,14 +251,9 @@ void load_filament_withSensor()
 				default:
 					break;
 			}
-			
 		} while ( !_continue );
 
-		
-		
-		
-		
-		
+
 		park_idler(true);
 		// TODO: do not repeat same code, try to do it until succesfull load
 		_loadSteps = 0;
@@ -257,16 +271,18 @@ void load_filament_withSensor()
 	}
 
 	{
-	float _speed = 4500;
-	const uint16_t steps = BowdenLength::get();
+    uint16_t _speed = load_init_speed;
+    uint16_t steps = BowdenLength::get();
 
 		for (uint16_t i = 0; i < steps; i++)
 		{
 			do_pulley_step();
 
-			if (i > 10 && i < 4000 && _speed > 650) _speed = _speed - 4;
-			if (i > 100 && i < 4000 && _speed > 650) _speed = _speed - 1;
-			if (i > 8000 && _speed < 3000) _speed = _speed + 2;
+			// ALWAYS make sure we decelerate: not later than 9.8 cm before the end. Slow speed will then be reached before the entering extruder.
+			// (decelerate means increasing the "delay" in _speed)
+			if (i > (steps - bowden_load_decelerate_steps) ) _speed = min (_speed + load_decel, load_slow_speed);
+			// If we do not need to decelerate, see if we may accelerate (so reduce the "delay" in _speed)
+			else if (i > 10) _speed = max (_speed-load_accel, load_fast_speed);
 			delayMicroseconds(_speed);
 		}
 	}
@@ -284,27 +300,30 @@ void unload_filament_withSensor()
 
 	set_pulley_dir_pull();
 
-	float _speed = 2000;
-	const float _first_point = 1800;
-	const float _second_point = 8700;
-	int _endstop_hit = 0;
-
 
 	// unload until FINDA senses end of the filament
-	int _unloadSteps = 10000;
-	do
+	uint32_t _unloadSteps = BowdenLength::getPrevious() + unload_extra_distance; 	//potentially unload EXTRA, so more than bowdenlength (1500 or 74mm as in the original)
+
+	uint32_t _zero_point = unload_start_lastdeceleration + unload_extra_distance; 	// compensated also for the 1500: pointer should not come BELOW 1500
+	uint32_t _first_point = unload_start_deceleration + unload_extra_distance; 		// compensated also for the 1500: pointer should not come BELOW 1500
+	uint32_t _second_point = _unloadSteps - unload_start_acceleration;
+	int _endstop_hit = 0;
+
+	uint32_t _speed = unload_init_speed;
+
+  do
 	{
 		do_pulley_step();
 		_unloadSteps--;
 
-		if (_unloadSteps < 1400 && _speed < 6000) _speed = _speed + 3;
-		if (_unloadSteps < _first_point && _speed < 2500) _speed = _speed + 2;
-		if (_unloadSteps < _second_point && _unloadSteps > 5000 && _speed > 550) _speed = _speed - 2;
+		if (_unloadSteps < _zero_point) _speed = min(_speed + unload_bigdecel, unload_veryslow_speed);	//decelerate FAST @ 400 AFTER this point (_unloadSteps is counting down, so this trigger last)
+		else if (_unloadSteps < _first_point)	_speed = min(_speed + unload_decel,    unload_slow_speed);  	//decelerate till 2500 (unload_slow_speed) @ first point
+		else if (_unloadSteps < _second_point)	_speed = max(_speed - unload_accel,    unload_fast_speed);  	//accelerate till 550 (unload_fast_speed) AFTER second point
 
 		delayMicroseconds(_speed);
 		if (digitalRead(A1) == 0) _endstop_hit++;
 
-	} while (_endstop_hit < 100 && _unloadSteps > 0);
+	} while (_endstop_hit < 100 && _unloadSteps > 0); //going 5mm beyond first FINDA release
 
 	// move a little bit so it is not a grinded hole in filament
 	for (int i = 100; i > 0; i--)

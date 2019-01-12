@@ -9,6 +9,7 @@
 #define MMCTL_H_
 
 extern int active_extruder;
+extern int previous_extruder;
 
 
 

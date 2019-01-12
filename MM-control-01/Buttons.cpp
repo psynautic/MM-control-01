@@ -186,7 +186,7 @@ void settings_bowden_length()
 					}
 				}
 				button_active = true;
-				break; 
+				break;
 			default:
 				button_active = false;
 				saved_millis = millis();
@@ -203,6 +203,7 @@ void settings_bowden_length()
 
 		} while (buttonClicked() != Btn::middle);
 
+    previous_extruder = active_extruder;
 		unload_filament_withSensor();
 	}
 }

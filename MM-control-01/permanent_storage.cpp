@@ -37,7 +37,7 @@ static eeprom_t * const eepromBase = reinterpret_cast<eeprom_t*>(0); //!< First 
 static const uint16_t eepromEmpty = 0xffff; //!< EEPROM content when erased
 static const uint16_t eepromLengthCorrectionBase = 7900u; //!< legacy bowden length correction base (~391mm)
 //static const uint16_t eepromBowdenLenDefault = 8900u; //!< Default bowden length (~427 mm)
-static const uint16_t eepromBowdenLenDefault = 15630u; //!< Default bowden length (~750 mm)
+static const uint16_t eepromBowdenLenDefault = 26575u; //!< Default bowden length (~1.275m)
 static const uint16_t eepromBowdenLenMinimum = 6900u; //!< Minimum bowden length (~341 mm)
 //static const uint16_t eepromBowdenLenMaximum = 16000u; //!< Maximum bowden length (~792 mm)
 static const uint16_t eepromBowdenLenMaximum = 65500u; //!< Maximum bowden length (~2.8m)
@@ -83,7 +83,31 @@ static bool validBowdenLen (const uint16_t BowdenLength)
 //! @return stored bowden length
 uint16_t BowdenLength::get()
 {
-	uint8_t filament = active_extruder;
+	int extruder = active_extruder;
+	return BowdenLength::getForExtruder(extruder);
+}
+
+
+
+//! @brief Get bowden length for previous filament
+//!
+//! Returns stored value
+//! @return stored bowden length for previous extruder
+uint16_t BowdenLength::getPrevious()
+{
+	int extruder = previous_extruder;
+	return BowdenLength::getForExtruder(extruder);
+}
+
+
+//! @brief Get bowden length for extruder as passed by argument
+//!
+//! Returns stored value
+//! @return stored bowden length for specified extruder
+uint16_t BowdenLength::getForExtruder(int extruder)
+{
+	uint8_t filament = extruder;
+
 	if (validFilament(filament))
 	{
 		uint16_t bowdenLength = eeprom_read_word(&(eepromBase->eepromBowdenLen[filament]));
@@ -101,8 +125,6 @@ uint16_t BowdenLength::get()
 
 	return eepromBowdenLenDefault;
 }
-
-
 //! @brief Construct BowdenLength object which allows bowden length manipulation
 //!
 //! To be created on stack, new value is permanently stored when object goes out of scope.

@@ -20,7 +20,7 @@ const int idler_parking_steps = (idler_steps / 2) + 40;  // 40
 const uint16_t bowden_load_decelerate_steps = 2000; //Start deceleration this many steps before end of bowden length is reached so ~98mm 2000. (1500 for FAST)
 const uint16_t load_init_speed = 4500;				//Initial speed when loading
 const uint16_t load_slow_speed = 3000;				//Slow speed while loading (pushing) the filament
-const uint16_t load_fast_speed = 650;				//Fast speed while loading (pushing) the filament 650, (300 for fast).
+const uint16_t load_fast_speed = 850;				//Fast speed while loading (pushing) the filament 650, (300 for fast).
 const uint8_t load_decel = 4;						//@unload, the deceleration 4 (6 for fast)
 const uint8_t load_accel = 5;						//@unload, the acceleration 5 (8 for fast)
 
@@ -29,7 +29,7 @@ const uint16_t unload_extra_distance = 1500;		//Extra steps during unload for re
 const uint16_t unload_init_speed = 2000;			//Initial speed when unloading
 const uint16_t unload_veryslow_speed = 6000;		//Very slow speed while unloading (pulling) the filament
 const uint16_t unload_slow_speed = 2500;			//Slow speed while unloading (pulling) the filament
-const uint16_t unload_fast_speed = 550;				//Fast speed while unloading (pulling) the filament 550, (250 for FAST)
+const uint16_t unload_fast_speed = 850;				//Fast speed while unloading (pulling) the filament 550, (250 for FAST)
 const uint16_t unload_start_acceleration = 1500;	//Start acceleration after this many steps
 const uint16_t unload_start_deceleration = 1500;	//Start deceleration this steps before the end 1500 (1100 for FAST)
 const uint16_t unload_start_lastdeceleration = 1100;//Start the final deceleration this steps before the end 1100 (700 for FAST)
@@ -92,16 +92,16 @@ void eject_filament(int extruder)
 
 	int8_t selector_offset_for_eject = 0;
 	int8_t idler_offset_for_eject = 0;
-		
+
 	//if there is still filament detected by PINDA unload it first
 	if (isFilamentLoaded)  unload_filament_withSensor();
-	
+
 	select_extruder(active_extruder); //Enforce home idler and selector.
 
 	if (isIdlerParked) park_idler(true); // if idler is in parked position un-park him get in contact with filament
-	
+
 	tmc2130_init_axis(AX_PUL, tmc2130_mode);
-		
+
 	//if we are want to eject fil 0-2, move seelctor to position 4 (right), if we want to eject filament 3 - 4, move selector to position 0 (left)
 	//maybe we can also move selector to service position in the future?
 	if (extruder <= 2) selector_position = 4;

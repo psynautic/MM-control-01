@@ -9,6 +9,7 @@
 #include <cstddef>
 
 int active_extruder = -1;
+int previous_extruder = 0;
 static unsigned long writes = 0;
 static int corrupt = -1;
 
